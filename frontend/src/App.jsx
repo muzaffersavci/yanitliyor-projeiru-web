@@ -1,16 +1,26 @@
-// frontend/src/App.jsx - ULTIMATE STARTUP EDITION (Animasyonlu Landing Page + Dashboard)
+// frontend/src/App.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
-import { 
-  MessageSquare, BarChart2, Settings, Loader2, LogOut, 
+import {
+  MessageSquare, BarChart2, Settings, Loader2, LogOut,
   Target, Bot, Send, AlertTriangle, RefreshCw, ArrowRight,
-  Check, Lock, CreditCard, Shield, Eye, EyeOff, X, Zap, Star, ThumbsUp, ThumbsDown, FileText, ArrowLeft
+  Check, Lock, CreditCard, Shield, Eye, EyeOff, X, Zap, Star, ThumbsUp, ThumbsDown, FileText, ArrowLeft, UserPlus
 } from 'lucide-react';
+import RegisterPage from './pages/RegisterPage';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID; 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const API_URL = import.meta.env.VITE_API_URL;
+
+// JWT Bearer token otomatik olarak her isteğe eklenir
+axios.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 if (!GOOGLE_CLIENT_ID || !API_URL) {
     console.warn("DIKKAT: VITE_GOOGLE_CLIENT_ID veya VITE_API_URL eksik!");
@@ -87,9 +97,14 @@ const LandingPage = () => {
                 <div className="flex items-center gap-2 text-blue-600 font-extrabold text-3xl tracking-tight">
                     <MessageSquare size={32} className="fill-blue-600 text-white"/> Yanıtlıyor
                 </div>
-                <Link to="/login" className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-black transition shadow-md">
-                    Giriş Yap
-                </Link>
+                <div className="flex items-center gap-3">
+                    <Link to="/register" className="text-blue-600 font-bold hover:underline transition">
+                        Kayıt Ol
+                    </Link>
+                    <Link to="/login" className="bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-black transition shadow-md">
+                        Giriş Yap
+                    </Link>
+                </div>
             </header>
 
             <main className="flex-1 flex flex-col items-center text-center px-4 pt-20 pb-16">
@@ -280,7 +295,7 @@ const MainApp = () => {
 
   const checkUser = async (t) => {
     try {
-      const res = await axios.get(`${API_URL}/dashboard`, { headers: { 'x-token': t } });
+      const res = await axios.get(`${API_URL}/dashboard`);
       // Dashboard başarıyla geldi - normal kullanıcı veya admin
       setUser({ token: t, is_admin: localStorage.getItem('is_admin') === 'true' });
     } catch (e) {
@@ -428,6 +443,12 @@ const AuthFlow = ({ onLogin }) => {
               {isLoggingIn ? <Loader2 className="animate-spin text-white" size={24}/> : "Panele Gir"}
             </button>
           </div>
+          <div className="mt-6 text-center">
+            <span className="text-gray-400 text-sm font-medium">Hesabınız yok mu? </span>
+            <Link to="/register" className="text-blue-600 font-bold text-sm hover:underline">
+              Ücretsiz kayıt olun
+            </Link>
+          </div>
         </div>
       </div>
     </div>
@@ -472,7 +493,7 @@ const SetupWizard = ({ token, googleToken, onComplete }) => {
         setSearching(true);
         setError(null);
         try {
-            const res = await axios.post(`${API_URL}/competitor-analysis/search`, { query: searchQuery }, { headers: { 'x-token': token } });
+            const res = await axios.post(`${API_URL}/competitor-analysis/search`, { query: searchQuery });
             setSearchResults(res.data.results || []);
             if (res.data.results.length === 0) setError("Sonuç bulunamadı, farklı bir arama deneyin.");
         } catch { setError("Arama sırasında hata oluştu."); }
@@ -644,7 +665,7 @@ const MembershipPlans = ({ token, onPaid, onError }) => {
     const pay = async (type) => {
         setLoading(true);
         try {
-            await axios.post(`${API_URL}/payment/subscribe`, { card_number: "123", duration_months: 1, package_type: type }, { headers: { 'x-token': token } });
+            await axios.post(`${API_URL}/payment/subscribe`, { card_number: "123", duration_months: 1, package_type: type });
             onPaid();
         } catch(e) { onError("Ödeme başarısız."); setLoading(false); }
     };
@@ -712,7 +733,7 @@ function Dashboard({ user, onLogout, demoMode = false, demoData = null, onSetup 
     if (demoMode) return;
     if (showLoader) setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/dashboard`, { headers: { 'x-token': user.token } });
+      const res = await axios.get(`${API_URL}/dashboard`);
       setData(res.data);
     } catch(e) { console.error('Dashboard refresh error:', e); setLoading(false); }
     finally { if (showLoader) setLoading(false); }
@@ -721,7 +742,7 @@ function Dashboard({ user, onLogout, demoMode = false, demoData = null, onSetup 
   const fetchReal = async () => {
     if (demoMode) { setToast({msg: '🔒 Demo moddasınız. İşletmenizi bağlayın!', type: 'error'}); return; }
     try {
-      const res = await axios.post(`${API_URL}/business/fetch-reviews`, {}, { headers: { 'x-token': user.token } });
+      const res = await axios.post(`${API_URL}/business/fetch-reviews`, {});
       setToast({msg: res.data.msg, type: 'success'});
       refresh(false);
     } catch(e) { setToast({msg: e.response?.data?.detail || "Hata", type: 'error'}); }
@@ -1040,7 +1061,7 @@ const ReviewsView = ({ reviews, token, onUpdate, onToast, demoMode = false, memb
     const action = async (id, type) => {
         if (demoMode) { onToast({msg: '🔒 Demo modunda işlem yapılamaz.', type: 'error'}); return; }
         try {
-            await axios.post(`${API_URL}/reviews/${id}/action?action=${type}&reply=${encodeURIComponent(txt)}`, {}, { headers: { 'x-token': token } });
+            await axios.post(`${API_URL}/reviews/${id}/action?action=${type}&reply=${encodeURIComponent(txt)}`, {});
             setEditId(null); onUpdate(); onToast({msg: 'İşlem başarılı', type: 'success'});
         } catch(e) { onToast({msg: e.response?.data?.detail || "Hata", type: 'error'}); }
     };
@@ -1156,14 +1177,14 @@ const CompetitorAnalysisView = ({ token, onToast }) => {
     const [analysis, setAnalysis] = useState(null);
     const search = async () => {
         try {
-            const res = await axios.post(`${API_URL}/competitor-analysis/search`, { query }, { headers: { 'x-token': token } });
+            const res = await axios.post(`${API_URL}/competitor-analysis/search`, { query });
             setResults(res.data.results);
         } catch { onToast({msg: 'Arama hatası', type: 'error'}); }
     };
     const analyze = async (place) => {
         setStep(2);
         try {
-            const res = await axios.post(`${API_URL}/competitor-analysis/analyze`, { place_id: place.place_id, name: place.name }, { headers: { 'x-token': token } });
+            const res = await axios.post(`${API_URL}/competitor-analysis/analyze`, { place_id: place.place_id, name: place.name });
             setAnalysis(res.data); setStep(3);
         } catch { onToast({msg: 'Analiz hatası', type: 'error'}); setStep(1); }
     };
@@ -1218,7 +1239,7 @@ const ConsultantView = ({ token, businessName, onToast, demoMode = false, member
         if (demoMode) { onToast({msg: '🔒 AI Danışman demo modda kullanılamaz. Paket alın!', type: 'error'}); return; }
         const m = input; setMsgs(p => [...p, {s: 'user', t: m}]); setInput("");
         try {
-            const res = await axios.post(`${API_URL}/consultant/chat`, { message: m }, { headers: { 'x-token': token } });
+            const res = await axios.post(`${API_URL}/consultant/chat`, { message: m });
             setMsgs(p => [...p, {s: 'ai', t: res.data.reply}]);
         } catch(e) { onToast({msg: e.response?.data?.detail || (demoMode ? '🔒 AI Danışman demo modda kullanılamaz. Paket alın!' : 'Bağlantı koptu'), type: 'error'}); }
     };
@@ -1249,7 +1270,7 @@ const AdminPanelView = ({ token }) => {
     const fetchUsers = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`${API_URL}/admin/users`, { headers: { 'x-token': token } });
+            const res = await axios.get(`${API_URL}/admin/users`);
             setUsers(res.data);
         } catch {}
         setLoading(false);
@@ -1258,7 +1279,7 @@ const AdminPanelView = ({ token }) => {
     useEffect(() => { fetchUsers(); }, []);
 
     const toggle = async (id) => {
-        await axios.post(`${API_URL}/admin/toggle-user/${id}`, {}, { headers: { 'x-token': token } });
+        await axios.post(`${API_URL}/admin/toggle-user/${id}`, {});
         fetchUsers();
     };
 
@@ -1394,6 +1415,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<LandingPage/>}/>
         <Route path="/login" element={<MainApp/>}/>
+        <Route path="/register" element={<RegisterPage/>}/>
+        <Route path="/dashboard" element={<MainApp/>}/>
         <Route path="/gizlilik" element={<PrivacyPolicy/>}/>
         <Route path="/sartlar" element={<TermsOfService/>}/>
       </Routes>
