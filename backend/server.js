@@ -23,7 +23,10 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Vercel preview URL'lerini izin ver (*.vercel.app)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
     callback(new Error('CORS politikası ihlali'));
   },
   credentials: true,
